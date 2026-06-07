@@ -1,0 +1,55 @@
+# configs/pipeline.yaml
+
+pipeline:
+  run_ingestion:  true    # chunk + embed corpus
+  run_retrieval:  true    # test retrieval on sample queries
+  run_generation: true    # generate answers
+  run_evaluation: false   # Phase III — off until golden QA set exists
+
+ingestion:
+  posts_file:    data/posts.jsonl
+  comments_file: data/comments.jsonl
+  filters:
+    min_comment_score:  2
+    min_comment_chars:  40
+    min_post_score:     10
+    max_depth:          6
+    exclude_flairs:
+      - "Meme/Shitpost"
+    exclude_authors:
+      - "u/AutoModerator"
+  chunking:
+    strategy:         adaptive     # adaptive | fixed | semantic
+    tiny_threshold:   100          # chars — bundle these
+    short_threshold:  400          # chars — bundle 2-3
+    long_threshold:   800          # chars — split these
+    split_size:       600          # tokens
+    split_overlap:    100          # tokens
+    max_bundle_size:  8            # max comments per bundle
+
+embedding:
+  provider:   ollama               # ollama | openai
+  model:      nomic-embed-text     # swap here to experiment
+  chroma_dir: ./chroma_db
+  collection: nygiants_chunks
+
+retrieval:
+  k:              20
+  min_score:      0.7
+  max_per_date:   3                # diversity filter
+  max_per_author: 2                # diversity filter
+
+generation:
+  provider: anthropic              # anthropic | ollama
+  model:    claude-sonnet-4-6      # swap here to experiment
+  prompt_template: configs/prompts/fan_sentiment_v1.txt
+  max_tokens: 1000
+
+evaluation:
+  golden_qa_file: src/evaluation/golden_qa.jsonl
+  metrics:
+    - faithfulness
+    - answer_relevancy
+    - context_recall
+    - context_precision
+  mlflow_experiment: nygiants_rag
