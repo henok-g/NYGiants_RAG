@@ -15,81 +15,75 @@ from filters import load_corpus
 import yaml
 import matplotlib.pyplot as plt
 from typing import List, Optional, Dict, Any
-
-class ThreadNode:
-    def __init__(
-        self,
-        node_id: str,
-        node_type: str,
-        metadata: Dict[str, Any],
-        chunks: List[str],
-        children: Optional[List[ThreadNode]] = None
-    ):
-        self.node_id = node_id
-        self.node_type = node_type
-        self.metadata = metadata
-        self.chunks = chunks
-        self.children = children if children is not None else []
-                
+        
 class ThreadTree:
-    def __init__(self,config_file:str, root_nodes: Optional[List[ThreadNode]] = None):
+    def __init__(self,config_file:str):
         self.config_file = config_file
-        self.root_nodes = root_nodes if root_nodes is not None else self.createThreadTree()
-
     
     def createThreadTree(self):
         with open(self.config_file, 'r') as file:
             config = yaml.safe_load(file)
         
         self.chunk_config = config['ingestion']['chunking']
-        self.posts,self.comments = load_corpus(config)
+        self.posts, self.comments = load_corpus(config)
         
         parent_to_child = {}
         for comment in self.comments:
-            parent_id   = comment['parent_id']
-            
-            # map all parent ids to children
+            parent_id = comment['parent_id']
             if parent_id in parent_to_child:
                 parent_to_child[parent_id].append(comment)
             else:
                 parent_to_child[parent_id] = [comment]    
                 
-        def chunk(node,parent_chunk):
+        def chunk(node, current_parent_context):
             item_type = node['item_type']
-            id = node['id'] # post/comment id
+            node_id = node['id']
             
-            # handle different chunking rules depending on the item type
+            # 1. Prepare the chunk text and identify the next context to pass down
             if item_type == 'post':
-                title = node.pop("title","Missing Title")
-                selftext = node.pop("selftext","No Text")
-                chunks = ["<parent>" + parent_chunk + "<node>" + title + selftext] #  TODO: break up chunks based on chunking rules later
+                title = node.get("title", "Missing Title")
+                selftext = node.pop("selftext", "No Text")
+                chunk_text = f"<title>{title}<parent>{current_parent_context}<node>{selftext}"
                 id_prefix = "t3_"
-                parent_chunk = title + selftext
+                next_context = selftext
             elif item_type == 'comment':
-                body = node.pop('body', "No Text") # TODO: actually chunk this 
-                chunks = ["<parent>" + parent_chunk + "<node>" + body]
+                title = node.get("post_title", "No Title")
+                body = node.pop('body', "No Text")
+                chunk_text = f"<title>{title}<parent>{current_parent_context}<node>{body}"
                 id_prefix = "t1_"
-                parent_chunk = body
+                next_context = body
             else:
                 print(f"Wrong item type: {item_type}")
+                return 
                 
-            pid = id_prefix + id
-            children = []
+            # 2. Yield the current node as a flat object
+            yield {
+                'chunk_text': chunk_text, # Now a string, not a list
+                'metadata': node,
+            }
+            
+            # 3. Recurse to children
+            pid = id_prefix + node_id
             if pid in parent_to_child:
                 for child in parent_to_child[pid]:
-                    children.append(chunk(child, parent_chunk))
-            root = ThreadNode(id,item_type,node,chunks,children)
-            return root
+                    # pass 'next_context' (the current body/text) 
+                    # to the next level of recursion
+                    yield from chunk(child, next_context)
         
-        root_nodes = [chunk(p,"") for p in self.posts]
-        return root_nodes
-            
-            
-                
+        for post in self.posts:
+            yield from chunk(post, "")
 
-        
+
 if __name__ == "__main__":
     config_file = r"configs/pipeline.yaml"
+    
+    chunky = ThreadTree(config_file=config_file)  
+    root_nodes = chunky.createThreadTree()     
+    for root in root_nodes:
+        print(root['chunk_text'])
+        print(root['metadata']) 
+        print()
+    pass
     # with open(config_file, 'r') as file:
     #     config = yaml.safe_load(file) 
     
@@ -144,9 +138,7 @@ if __name__ == "__main__":
     
     # pass
 
-    chunky = ThreadTree(config_file=config_file)  
-    root_nodes = chunky.createThreadTree()      
-    pass
+  
     
         
     
