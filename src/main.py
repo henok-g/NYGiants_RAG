@@ -1,9 +1,9 @@
 import yaml
 import argparse
-from src.ingestion.chunker import run_ingestion
-from src.retrieval.retriever import run_retrieval
-from src.generation.chain import run_generation
-from src.evaluation.ragas_eval import run_evaluation
+from ingestion.pipeline import run_ingestion
+from retrieval.pipeline import run_retrieval
+from generation.pipeline import run_generation
+from evaluation.pipeline import run_evaluation
 
 def load_config(path: str)->dict:
     with open(path) as f:

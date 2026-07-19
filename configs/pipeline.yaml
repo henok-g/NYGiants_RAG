@@ -2,8 +2,8 @@
 
 pipeline:
   run_ingestion:  true    # chunk + embed corpus
-  run_retrieval:  true    # test retrieval on sample queries
-  run_generation: true    # generate answers
+  run_retrieval:  false    # test retrieval on sample queries
+  run_generation: false    # generate answers
   run_evaluation: false   # Phase III — off until golden QA set exists
 
 ingestion:
@@ -29,9 +29,10 @@ ingestion:
 
 embedding:
   provider:   ollama               # ollama | openai
-  model:      nomic-embed-text     # swap here to experiment
+  model:      nomic-embed-text     # swap here to experiment bge-large-en-v1.5, gte-large
   chroma_dir: ./chroma_db
   collection: nygiants_chunks
+  dimensions: 768
 
 retrieval:
   k:              20
