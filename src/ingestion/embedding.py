@@ -40,4 +40,7 @@ class LocalEmbedder(Embeddings):
             raise e
     
     async def embed_text(self, text):
+        '''
+        necessary for ragas
+        '''
         return self.embed_query(text).tolist()

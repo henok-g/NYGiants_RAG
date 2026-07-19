@@ -11,7 +11,7 @@ from ingestion.filters import load_corpus
 import yaml
 
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-##% Thread Tree Class: for traversing through reddit threads and returning chunks
+## Thread Tree Class: for traversing through reddit threads and returning chunks
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class ThreadTree:
     def __init__(self,config:dict):
