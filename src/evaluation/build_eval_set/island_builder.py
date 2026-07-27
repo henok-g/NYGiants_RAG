@@ -71,7 +71,7 @@ class IslandClusterer:
         for tid in breadth_threads:
             breadth_nodes.extend(threads[tid])
             
-        islands.append(breadth_nodes[:50])
+        islands.append(breadth_nodes[:25])
         print(f"Island 2 (Breadth) created with {len(breadth_nodes)} nodes from {len(breadth_threads)} meaningful threads.")
 
          # --- Island 3: The Bridge Island (Using ChromaDB) ---
@@ -119,12 +119,12 @@ class IslandClusterer:
                 for target_pid in unique_neighbors:
                     if target_pid in threads:
                         # Take up to the first 5 nodes from this specific thread
-                        neighbor_subset = threads[target_pid][:5]
+                        neighbor_subset = threads[target_pid][:2]
                         bridge_nodes.extend(neighbor_subset)
                         print(f"  -> Bridged neighbor {target_pid} ({len(neighbor_subset)} nodes)")
                 
                 # 4. Finalize the island
-                islands.append(bridge_nodes[:50])
+                islands.append(bridge_nodes[-14:])
                 print(f"Island 3 (Bridge) successfully bridged {seed_id} with {len(unique_neighbors)} neighbors.")
             else:
                 # Fallback: If no different post found, just take the seed

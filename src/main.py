@@ -1,6 +1,7 @@
 import yaml
 import argparse
 from ingestion.pipeline import run_ingestion
+from ingestion.chunking import ThreadTree
 from retrieval.pipeline import run_retrieval
 from generation.pipeline import run_generation
 from evaluation.pipeline import run_evaluation
@@ -23,7 +24,10 @@ def main(config_path:str):
         run_generation(config)
 
     if pipeline["run_evaluation"]:
-        run_evaluation(config)
+        
+        prepared_chunks = ThreadTree(config=config)  
+        root_nodes = list(prepared_chunks.createThreadTree())    
+        run_evaluation(config,root_nodes)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

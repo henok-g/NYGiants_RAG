@@ -1,0 +1,17 @@
+The Issue
+Ragas is heavily optimized for fast, cloud-based APIs. It relies on concurrent asynchronous loops to speed up tasks like theme-to-persona matching.When you
+pointed the standard OpenAI client at a local AI runner, Ragas unthrottled its inner loops. It sent multiple dense prompt requests simultaneously. This forced
+your local server to spin up 8+ context allocations at once, immediately overwhelming your 24GB GPU and crashing your VRAM.Furthermore, simply setting 
+max_workers=1 on the generator failed because Ragas features deep, hardcoded loops that completely bypass its top-level worker configurations.
+
+The Solution
+Instead of relying on hacky runtime overrides or brittle monkey-patching, you built a clean, native ThrottledLocalLLM class by subclassing Ragas's 
+abstract BaseRagasLLM component.
+    The Lock: 
+        Inside your custom class, you embedded a strict asynchronous queue using asyncio.Semaphore(1).
+    The Result: 
+        Even when Ragas unthrottles its backend loops and hits the class with massive concurrent chunks, your semaphore intercepts every request right before it 
+        reaches the local machine. It forces them into a single-file line, executing them sequentially to protect your 24GB VRAM.
+    The Parameters: 
+        It cleanly packages your optimized local configuration (num_ctx: 16384 and num_predict: 4096) directly over standard client payloads so your 26B model 
+        stays fast and never cuts text off early.

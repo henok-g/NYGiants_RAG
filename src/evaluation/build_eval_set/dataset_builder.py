@@ -11,16 +11,27 @@ sys.modules['langchain_community.chat_models.vertexai'] = langchain_google_verte
 
 # Ragas imports
 from ragas.llms import llm_factory
-from ragas.embeddings import embedding_factory
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
+
+from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.testset.transforms import default_transforms_for_prechunked,apply_transforms
 from ragas.testset.transforms.relationship_builders.traditional import JaccardSimilarityBuilder
 
+# Ragas synthesizer classes
+from ragas.testset.synthesizers import (
+    SingleHopSpecificQuerySynthesizer,  
+    MultiHopSpecificQuerySynthesizer,   
+    MultiHopAbstractQuerySynthesizer    
+)
+
 # Local imports
 from ingestion.chunking import ThreadTree
 from ingestion.embedding import LocalEmbedder
-from evaluation.island_builder import IslandClusterer
-
+from evaluation.build_eval_set.prototypes import PERSONAS,get_distribution
+from evaluation.build_eval_set.island_builder import IslandClusterer
+from evaluation.build_eval_set.throttled_local_llm import ThrottledLocalLLM
 
 class RagasDatasetBuilder:
     def __init__(self,config):
@@ -33,25 +44,32 @@ class RagasDatasetBuilder:
         self.client = OpenAI(base_url=llm_config['LOCAL_API_BASE'],api_key="not_needed")
         self.generator_llm = llm_factory(model=llm_config['MODEL_NAME'],
                                     client=self.client,
-                                    max_tokens=4096,
+                                    max_tokens=16000,
                                     extra_body = {
                                         "options": {
+                                            "num_predict": 8192,
                                             "num_ctx" : 16384,
                                             "temperature": 0.3
                                         }
                                     })
         
+        self.clean_generator_llm = ThrottledLocalLLM(
+            model_name=llm_config['MODEL_NAME'],
+            base_url=llm_config['LOCAL_API_BASE']
+        )
     def run(self, all_root_nodes: list):
-        if not self.build_from_scratch and os.path.exists(self.test_set_path):
-            print(f"--- LOADING EXISTING TEST SET FROM {self.test_set_path} ---")
-            return self._load_existing_test_set() # TODO: implement the load logic
-        else:
-            clusterer = IslandClusterer(self.config, self.client)
-            islands = clusterer.cluster_into_islands(all_root_nodes)
-            
-            for i,island_nodes in enumerate(islands):
-                self.build_kg(island_nodes,i)
+        clusterer = IslandClusterer(self.config, self.client)
+        islands = clusterer.cluster_into_islands(all_root_nodes)
         
+        for i,island_nodes in enumerate(islands):
+            kg_path = self.build_kg(island_nodes,i)    
+            mode = self.config["evaluation"].get("mode","prototype")
+            kg_path = os.path.join(self.test_set_path,"knowledge_graphs",mode,f"kg_{i}.json")
+            out_path = os.path.join(self.test_set_path,"golden_datasets",mode,f"golden_dataset_{i}.json")
+            self.generate_testset_from_kg(kg_path,out_path)
+            
+                
+       
     def build_kg(self,island_nodes: list, island_idx: int)-> str: 
         mode = self.config["evaluation"].get("mode","prototype")
 
@@ -69,7 +87,7 @@ class RagasDatasetBuilder:
         transforms = default_transforms_for_prechunked(self.generator_llm,self.embedder)
         apply_transforms(kg,transforms)
         
-        target_dir = os.path.join(self.test_set_path,mode)
+        target_dir = os.path.join(self.test_set_path,"knowledge_graphs",mode)
         os.makedirs(target_dir, exist_ok=True)
         
         file_name = f"kg_{island_idx}.json"
@@ -77,7 +95,70 @@ class RagasDatasetBuilder:
         
         kg.save(full_path)
         
+        return full_path
         
+    
+    def generate_testset_from_kg(self, kg_path: str, output_filename: str):
+        """
+        Loads a specific KG and uses Ragas to generate the Gold Standard dataset.
+        """
+        print(f"--- GENERATING TEST SET FROM: {kg_path} ---")
+        
+        # Load the saved Knowledge Graph
+        kg = KnowledgeGraph.load(kg_path)
+
+        for node in kg.nodes:
+            if "summary_embedding" in node.properties:
+                del node.properties["summary_embedding"]
+                
+                
+        # Initialize the Generator
+        generator = TestsetGenerator(
+            self.clean_generator_llm,
+            LangchainEmbeddingsWrapper(self.embedder),
+            knowledge_graph=kg,
+            persona_list=list(PERSONAS.values()),
+        )
+        # generator = TestsetGenerator(
+        #     LangchainLLMWrapper(self.generator_llm),
+        #     LangchainEmbeddingsWrapper(self.embedder),
+        #     knowledge_graph=kg,
+        #     persona_list=list(PERSONAS.values()),
+        # )
+        # generator = TestsetGenerator.from_langchain(
+        #     self.generator_llm, 
+        #     self.embedder,
+        #     knowledge_graph=kg,
+        #     # persona_list=list(PERSONAS.values()),
+        # )
+
+        mapping = ["deep","breadth","bridge"]
+        query_distribution = get_distribution(mapping[int(kg_path[-6])],self.clean_generator_llm)
+        
+        from ragas.run_config import RunConfig
+        single_worker_config = RunConfig(
+            max_workers=1,
+            timeout=240,
+        )
+        
+        # Generate the questions
+        # 'distribution' allows control over how many questions are simple vs multi-hop/complex.
+        # Since islands are already specialized, we can keep it balanced.
+        testset = generator.generate(
+            testset_size=10, # Number of questions per island
+            query_distribution=query_distribution,
+            run_config=single_worker_config,
+        )
+
+        # 4. Convert to a format easy to use (e.g., a Pandas DataFrame or JSON)
+        df = testset.to_pandas()
+        
+        # 5. Save the Gold Standard
+        df.to_json(output_filename, orient="records", indent=4)
+        print(f"--- SUCCESS: Test set saved to {output_filename} ---")
+        return df
+    
+     
     def build_kg_old(self):    
         chunky = ThreadTree(self.config)  
         embedder = LocalEmbedder(self.config)
