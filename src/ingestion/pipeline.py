@@ -1,17 +1,8 @@
 from __future__ import annotations  
-import json
-
+import chromadb
+from tqdm import tqdm
 from ingestion.chunking import ThreadTree
 from ingestion.embedding import LocalEmbedder
-from ingestion.filters import load_corpus
-
-import yaml
-import matplotlib.pyplot as plt
-from typing import List
-import ollama
-from tqdm import tqdm
-import chromadb
-from langchain_core.embeddings import Embeddings
 
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ##% Chunks corpus, creates embeddings and stores in vector db

@@ -8,7 +8,6 @@ and store it into a vector database
 
 from __future__ import annotations  
 from ingestion.filters import load_corpus
-import yaml
 
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Thread Tree Class: for traversing through reddit threads and returning chunks

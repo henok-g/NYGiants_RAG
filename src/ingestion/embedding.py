@@ -1,9 +1,9 @@
 from __future__ import annotations  
-import yaml
-from typing import List
+
 import ollama
-from langchain_core.embeddings import Embeddings
 import numpy as np
+from typing import List
+from langchain_core.embeddings import Embeddings
 
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ##% Local Embedder Class: Converts chunks into embeddings
